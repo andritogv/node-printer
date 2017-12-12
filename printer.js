@@ -1,10 +1,11 @@
-var Job = require ('./job');
+var Job = require('./job');
 var spawn = require('child_process').spawn;
 var spawnSync = require('child_process').spawnSync;
-var _ = require ('underscore');
+var _ = require('underscore');
 var utils = require('util');
 var events = require('events');
 utils.inherits(Printer, events.EventEmitter);
+var platform = require('os').platform();
 
 /**
  * Describes the parameter options accepted by lp
@@ -174,11 +175,11 @@ var optionsFactory = function (options) {
   var selGeneralOptions = {};
 
 
-  _.each(generalOptions, function(generalOption, generalOptionId) { // for each of lp available options
-    _.each(generalOption.options, function(option) { // for each option possible name
-      if(typeof options[option] !== 'undefined') { // check of the method options contains the value
-        if(generalOption.expects === '') { // when expects is empty, ommit the options defined value, just add
-          if(options[option]) {
+  _.each(generalOptions, function (generalOption, generalOptionId) { // for each of lp available options
+    _.each(generalOption.options, function (option) { // for each option possible name
+      if (typeof options[option] !== 'undefined') { // check of the method options contains the value
+        if (generalOption.expects === '') { // when expects is empty, ommit the options defined value, just add
+          if (options[option]) {
             selGeneralOptions[generalOptionId] = true;
           }
         } else {
@@ -186,8 +187,8 @@ var optionsFactory = function (options) {
         }
       }
     });
-    if(typeof generalOption.default != 'undefined') { // if method options does not contains the value, use default if available
-      if(typeof selGeneralOptions[generalOptionId] == 'undefined') {
+    if (typeof generalOption.default != 'undefined') { // if method options does not contains the value, use default if available
+      if (typeof selGeneralOptions[generalOptionId] == 'undefined') {
         selGeneralOptions[generalOptionId] = generalOption.default;
       }
     }
@@ -195,39 +196,39 @@ var optionsFactory = function (options) {
 
   var selOOptions = {};
 
-  _.each(oOptions, function(oOption, oOptionId) { // for each of lp available options
-    _.each(oOption.options, function(option) { // for each option possible name
-      if(typeof options[option] !== 'undefined') { // check of the method options contains the value
-        if(oOption.expects === '') { // when expects is empty, ommit the options defined value, just add
-          if(options[option]) {
+  _.each(oOptions, function (oOption, oOptionId) { // for each of lp available options
+    _.each(oOption.options, function (option) { // for each option possible name
+      if (typeof options[option] !== 'undefined') { // check of the method options contains the value
+        if (oOption.expects === '') { // when expects is empty, ommit the options defined value, just add
+          if (options[option]) {
             selOOptions[oOptionId] = true;
           }
         } else {
           selOOptions[oOptionId] = options[option];
         }
-      } else if(typeof oOption.default != 'undefined') { // if method options does not contains the value, use default if available
+      } else if (typeof oOption.default != 'undefined') { // if method options does not contains the value, use default if available
         selOOptions[oOptionId] = oOption.default;
       }
     });
-    if(typeof oOption.default != 'undefined') { // if method options does not contains the value, use default if available
-      if(typeof selOOptions[oOptionId] == 'undefined') {
+    if (typeof oOption.default != 'undefined') { // if method options does not contains the value, use default if available
+      if (typeof selOOptions[oOptionId] == 'undefined') {
         selOOptions[oOptionId] = oOption.default;
       }
     }
   });
 
-  if(!_.isEmpty(selOOptions)) {
+  if (!_.isEmpty(selOOptions)) {
     var selOoptionsString = '';
-    _.each(selOOptions, function(oOption, oOptionId) {
-      if(oOptions[oOptionId].expects === '') {
-        if(oOption) {
+    _.each(selOOptions, function (oOption, oOptionId) {
+      if (oOptions[oOptionId].expects === '') {
+        if (oOption) {
           selOoptionsString = selOoptionsString + ' ' + oOptionId;
         }
       } else {
         selOoptionsString = selOoptionsString + ' ' + oOptionId + '=' + oOption;
       }
     });
-    if(typeof selGeneralOptions.o == 'string') {
+    if (typeof selGeneralOptions.o == 'string') {
       selGeneralOptions.o = selGeneralOptions.o + selOoptionsString;
     } else {
       selGeneralOptions.o = selOoptionsString;
@@ -237,11 +238,11 @@ var optionsFactory = function (options) {
   return selGeneralOptions;
 };
 
-var argsFactory = function(options) {
+var argsFactory = function (options) {
   var args = [];
-  _.each(options, function(optionValue, optionKey) {
-    if(generalOptions[optionKey].expects === '') {
-      if(optionValue) {
+  _.each(options, function (optionValue, optionKey) {
+    if (generalOptions[optionKey].expects === '') {
+      if (optionValue) {
         args.push('-' + optionKey);
       }
     } else {
@@ -252,13 +253,13 @@ var argsFactory = function(options) {
   return args;
 };
 
-var buildArgs = function(options) {
+var buildArgs = function (options) {
   if (!options) return [];
   options = optionsFactory(options);
   return argsFactory(options);
 };
 
-var parseStdout = function(data) {
+var parseStdout = function (data) {
   if (!Buffer.isBuffer(data)) return [];
   return data.toString()
     .replace(/\n$/, '')
@@ -270,7 +271,7 @@ function Printer(name) {
   if (!Printer.match(name)) {
     console.error(
       name + ' printer does not exist ; installed printers are ' + Printer.list()
-      );
+    );
     throw new Error('Printer ' + name + ' does not exist on your system.');
   }
   self.name = name;
@@ -278,32 +279,42 @@ function Printer(name) {
   self.watch();
 }
 
-Printer.list = function() {
-  return parseStdout(spawnSync('lpstat', ['-p']).stdout)
-    .filter(function(line) {
-      return line.match(/^printer/);
-    })
-    .map(function(printer) {
-      return printer.match(/^printer (\S+)/)[1];
-    });
+Printer.list = function () {
+  if (platform === 'darwin' || platform === 'linux') {
+    return parseStdout(spawnSync('lpstat', ['-p']).stdout)
+      .filter(function (line) {
+        return line.match(/^printer/);
+      })
+      .map(function (printer) {
+        return printer.match(/^printer (\S+)/)[1];
+      });
+  } else if (platform === 'win32') {
+    return parseStdout(spawnSync('wmic', ['printer', 'get', 'name']).stdout)
+      .filter(function (line) {
+        return line.match(/^(?!Name)/);
+      })
+      .map(function (printer) {
+        return printer.trim();
+      });
+  }
 };
 
-Printer.match = function(name) {
-  return Boolean(Printer.list().filter(function(printer) {
+Printer.match = function (name) {
+  return Boolean(Printer.list().filter(function (printer) {
     return name === printer;
   }).length);
 };
 
-Printer.prototype.watch = function() {
+Printer.prototype.watch = function () {
   var self = this;
   var args = ['-P', this.name];
 
   var lpq = spawn('lpq', args);
 
-  lpq.stdout.on('data', function(data) {
+  lpq.stdout.on('data', function (data) {
     var parsedData = parseStdout(data)
       .slice(2)
-      .map(function(line) {
+      .map(function (line) {
         line = line.split(/[ ]{2,}/);
         return {
           rank: (line[0] === 'active' ? line[0] : parseInt(line[0].slice(0, -2))),
@@ -314,8 +325,8 @@ Printer.prototype.watch = function() {
         };
       });
 
-    self.jobs.map(function(job) {
-      var status = parsedData.filter(function(status) {
+    self.jobs.map(function (job) {
+      var status = parsedData.filter(function (status) {
         if (status.identifier === job.identifier) return status;
       })[0];
 
@@ -327,18 +338,18 @@ Printer.prototype.watch = function() {
     });
   });
 
-  lpq.on('exit', function() {
+  lpq.on('exit', function () {
     self.watch();
   });
 };
 
-Printer.prototype.findJob = function(jobId) {
-  return this.jobs.filter(function(job) {
+Printer.prototype.findJob = function (jobId) {
+  return this.jobs.filter(function (job) {
     if (job.identifier === jobId) return job;
   })[0];
 };
 
-Printer.prototype.printBuffer = function(data, options) {
+Printer.prototype.printBuffer = function (data, options) {
   var self = this;
   var args = buildArgs(options);
   args.push('-d', self.name);
@@ -349,11 +360,11 @@ Printer.prototype.printBuffer = function(data, options) {
   lp.stdin.end();
 
   var job = new Job(lp);
-  job.on('sent', function() {
+  job.on('sent', function () {
     self.jobs.push(job);
   });
 
-  job.on('completed', function() {
+  job.on('completed', function () {
     self.jobs.splice(self.jobs.indexOf(job), 1);
   });
 
@@ -362,7 +373,7 @@ Printer.prototype.printBuffer = function(data, options) {
 
 Printer.prototype.printText = Printer.prototype.printBuffer;
 
-Printer.prototype.printFile = function(filePath, options) {
+Printer.prototype.printFile = function (filePath, options) {
   var self = this;
   var args = buildArgs(options);
   args.push('-d', self.name);
@@ -373,11 +384,11 @@ Printer.prototype.printFile = function(filePath, options) {
   var lp = spawn('lp', args);
 
   var job = new Job(lp);
-  job.on('sent', function() {
+  job.on('sent', function () {
     self.jobs.push(job);
   });
 
-  job.on('completed', function() {
+  job.on('completed', function () {
     self.jobs.splice(self.jobs.indexOf(job), 1);
   });
 
